@@ -1,0 +1,67 @@
+\section{Cluster Selection Methodology}\label{sec:method}
+
+\subsection{Resource-capacity information available in Karmada}\label{sec:method-capacity}
+
+Karmada's cluster status controller, or the Karmada agent for clusters in pull mode, lists the nodes and pods of each member cluster and writes three aggregate quantities to the Cluster object, by default every 10 s and only when they have changed \cite{karmada_repo}. \emph{Allocatable} $A_c^k$ is the sum of the allocatable amount of resource $k$ over all listed nodes, including nodes that are not ready or are cordoned. \emph{Allocated} $U_c^k$ is the sum of the resource requests of pods that are bound to a node and have not terminated, in all namespaces. \emph{Allocating} $P_c^k$ is the sum of the requests of pods that are not yet bound to a node. The request of a pod is the sum of its container requests, raised to the largest init-container request if that is higher, plus the pod overhead.
+
+All three quantities describe requested, or reserved, resources. None of them reflects measured utilisation. This has three consequences for any decision based on them. Pods without requests contribute nothing, so a cluster loaded by such pods appears emptier than it is. Pending pods that will never fit still count in $P_c^k$, which is conservative. Nodes that cannot accept pods still count in $A_c^k$, which is optimistic. The design uses this information anyway, because it is the same request-based view that Kubernetes uses to admit pods to nodes, it is already present in the scheduler's cache, and it does not depend on an external monitoring system.
+
+Aggregate quantities do not show fragmentation. A pod must fit on a single node, so a free amount $F_c^k \geq d_w^k$ does not guarantee that one replica fits. Karmada's replica estimators handle this to different degrees. The general estimator divides the free aggregate amount by the per-replica request when no resource models are available. When resource models are enabled, which is the default, each node is assigned to a grade according to its free resources and represented by the lower bound of that grade, which is conservative. With the default grade boundaries, a node with less than one free CPU or less than 4 GiB of free memory falls into the lowest grade, whose lower bound is zero, and contributes no capacity. Clusters built from small nodes are therefore underestimated unless finer resource models are configured. An optional accurate estimator simulates node-level placement inside each member cluster through a remote call. Disabling the controller option \code{enable-cluster-resource-modeling} is not a way to switch the models off: it stops the collection of the whole resource summary, after which the estimate becomes zero. The models are controlled by a separate feature gate.
+
+\subsection{Mandatory eligibility constraints}\label{sec:method-hard}
+
+A cluster belongs to the eligible set $\Feas$ only if all of the following conditions hold. They are evaluated in the filter stage, before any score is computed.
+\begin{itemize}
+  \item H1 (existing): the cluster serves the API of the workload, matches the cluster affinity of the policy, and has no taint that the workload does not tolerate. Unhealthy clusters receive \code{not-ready} or \code{unreachable} taints automatically, so health is covered by this condition.
+  \item H2 (capacity): the whole workload fits,
+  \begin{equation}\label{eq:capacity}
+    m_c(w) = \min_{e \in E} \widehat{m}_{c}^{e}(w) \geq n_w,
+  \end{equation}
+  where $E$ is the set of replica estimators registered in the scheduler and $\widehat{m}_{c}^{e}(w)$ is the estimate of estimator $e$.
+  \item H3 (data presence): the resource summary of the cluster exists. Otherwise $m_c(w) = 0$ and H2 fails.
+  \item H4 (optional latency bound): if a hard bound $\ell_{\max}$ is configured, the measurement of $c$ must be valid in the sense of \cref{sec:method-validity} and $\ell_c \leq \ell_{\max}$.
+\end{itemize}
+
+The condition in \cref{eq:capacity} uses the same estimators that Karmada's selection stage uses, as required by D-R3. Without H2 in the filter stage, a top-scored cluster that lacks capacity would be replaced by the cluster with most available replicas (P8), which discards the ranking. With H2, the clusters that reach the scoring stage are those that the selection stage would also accept. Fragmentation is handled to the extent provided by the configured estimator; the plugin does not re-implement node-level fitting.
+
+H4 is evaluated fail-closed: a cluster without a valid measurement is not eligible. A hard bound is a guarantee, and a guarantee cannot be checked without data. H4 is therefore kept out of the default configuration, in which latency is only a preference.
+
+\subsection{Resource suitability}\label{sec:method-resource}
+
+Resource suitability is the fraction of the bottleneck resource that remains free after the workload is placed:
+\begin{equation}\label{eq:resource}
+  R_c(w) = \operatorname{clip}\!\left( \min_{k \in \Kr} \frac{F_c^{k} - n_w\, d_w^{k}}{A_c^{k}},\ 0,\ 1 \right).
+\end{equation}
+The minimum follows the resource that limits the cluster, so a cluster with free CPU but little free memory does not obtain a high value. Normalising by $A_c^k$ makes the value independent of cluster size. This is the intended difference from the default tie-break (P7), which prefers the cluster with the largest absolute number of available replicas and therefore tends towards large clusters. Aggregate values are acceptable in \cref{eq:resource} because $R_c$ is only a preference; whether the replicas fit on nodes is already ensured by H2.
+
+\subsection{Network suitability}\label{sec:method-network}
+
+For a single-tier service placed on one cluster, the relevant network path runs from the clients to the cluster. Network suitability is therefore based on the client-to-cluster round-trip time $\ell_c$, measured from a vantage point that represents the clients:
+\begin{equation}\label{eq:network}
+  N_c = \operatorname{clip}\!\left( 1 - \frac{\ell_c}{\ell_{\mathrm{ref}}},\ 0,\ 1 \right).
+\end{equation}
+The reference value $\ell_{\mathrm{ref}}$ is derived from the latency budget of the service, for example from the share of the response-time objective that may be spent on the network. Latency between services becomes relevant only when the components of an application are split across clusters, which single-cluster placement excludes.
+
+\Cref{eq:network} uses an absolute reference instead of normalising across the current candidates. With min-max normalisation over two or three candidates, the best cluster always receives 1 and the worst 0, whether they differ by 1 ms or by 100 ms. The absolute form keeps scores comparable between decisions and gives $\alpha$ a stable meaning. The median of the last $q_c$ samples is used for $\ell_c$ because it is not affected by single outliers.
+
+\subsection{Validity of network measurements}\label{sec:method-validity}
+
+A measurement of cluster $c$ is \emph{valid} at time $t$ if its annotations are present and well formed, it refers to the vantage point of the scheduler instance, it is based on enough samples and it is recent:
+\begin{equation}\label{eq:valid}
+  \mathrm{valid}_c(t) \iff q_c \geq q_{\min} \ \wedge\ t - t_c \leq \tau .
+\end{equation}
+The horizon $\tau$ is set to a small multiple of the probe period, for example three periods, so that a single delayed measurement does not invalidate a cluster. Let $\Vset \subseteq \Feas$ be the eligible clusters with a valid measurement. The final score is
+\begin{equation}\label{eq:score}
+  S_c(w) =
+  \begin{cases}
+    \operatorname{round}\!\big(100\,[\alpha R_c(w) + (1-\alpha) N_c]\big), & \Vset \neq \emptyset,\ c \in \Vset,\\[2pt]
+    \operatorname{round}\!\big(100\,\alpha R_c(w)\big), & \Vset \neq \emptyset,\ c \notin \Vset,\\[2pt]
+    \operatorname{round}\!\big(100\, R_c(w)\big), & \Vset = \emptyset .
+  \end{cases}
+\end{equation}
+
+The second case sets $N_c = 0$ for a cluster without a valid measurement: missing data is treated as the least favourable network value, never as a neutral or good one (D-R4). The cluster can still be selected if its resource headroom compensates. The third case applies when no candidate has a valid measurement: the decision falls back to resource-only ranking, so that no cluster is penalised relative to another for a failure that affects all of them. Two alternatives were rejected. A neutral value $N_c = 0.5$ would let an unmeasured cluster outrank a cluster known to be slow. Excluding unmeasured clusters would turn a preference into a mandatory condition and reduce availability when the probe fails. A malformed annotation is treated as missing; it never produces an error, because an error would abort the scheduling attempt (P4).
+
+\subsection{Weights and ties}\label{sec:method-weights}
+
+The weight $\alpha$ expresses how much resource headroom is preferred over proximity. It is a parameter of a scheduler instance, not of a workload. The score function receives only the specification of the binding, not its annotations, so per-workload parameters would need additional machinery. Workloads choose between configurations by naming a scheduler instance in their PropagationPolicy. The paper does not prescribe a value of $\alpha$; \cref{sec:analysis} derives for which ranges of $\alpha$ the decision changes. Scores are integers between 0 and 100, so differences below half a point are lost by rounding. Remaining ties are resolved by Karmada's order (P7), which makes the selection a deterministic function of the cluster snapshot.

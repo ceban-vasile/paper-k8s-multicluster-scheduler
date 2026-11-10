@@ -1,0 +1,9 @@
+\section{Limitations}\label{sec:limitations}
+
+The paper presents a design, not an evaluated system. No claim is made that the design improves response time or resource utilisation; such claims require the study of \cref{sec:validation}.
+
+The analysis of Karmada refers to release v1.19.1. Several of the properties in \cref{tab:karmada}, such as the unweighted sum of scores and the replacement rule in the selection stage, are internal behaviour rather than documented interfaces and may change in later releases. The analysis has to be repeated for each release on which the design is implemented.
+
+The resource term uses requested resources and aggregate values. It does not see load from pods without requests, and its accuracy for the capacity condition is limited by the configured estimator. The network term uses one client vantage point and the round-trip time to the cluster entry point; it does not cover several client populations, bandwidth, or latency between services of a workload split across clusters, which single-cluster placement excludes by assumption. The freshness check compares timestamps written by the probe with the scheduler's clock and assumes synchronised clocks.
+
+The design concerns initial placement only. Because Karmada does not revisit placements when cluster conditions change (P11), a workload stays on the selected cluster even if the conditions that led to the decision no longer hold.

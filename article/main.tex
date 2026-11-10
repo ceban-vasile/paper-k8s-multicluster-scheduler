@@ -1,0 +1,54 @@
+% main.tex -- CSMD-UTM article (design-oriented; no implementation or experiments)
+% Compile: tectonic -X compile main.tex   (or: latexmk -xelatex main.tex)
+\documentclass[12pt,a4paper]{article}
+\usepackage[english]{babel}
+\usepackage{csmd}          % unofficial reproduction of the CSMD-UTM Word template
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,fit,calc,backgrounds,shapes.misc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=*}
+
+\addbibresource{references.bib}
+
+% ---- Edition-specific footer: fill in when the next CSMD edition is announced ----
+\setcsmdfooter{Chisinau, [edition dates], Vol.~N}
+
+% ---- Notation helpers ----
+\newcommand{\Kr}{\mathcal{K}}
+\newcommand{\Cset}{\mathcal{C}}
+\newcommand{\Feas}{\mathcal{C}_{F}(w)}
+\newcommand{\Vset}{\mathcal{V}}
+\newcommand{\code}[1]{{\small\nolinkurl{#1}}}% breakable at / . _ ; write underscores unescaped
+
+\begin{document}
+
+\csmdtitle{Design of a Resource- and Network-Aware Cluster Selection Strategy for Karmada-Based Workload Placement}
+
+% ---- Author block: verify name and replace placeholders before submission ----
+\csmdauthors{Vasile CEBAN\textsuperscript{1*}}
+\csmdaffiliation{\textsuperscript{1}[Department], group [GROUP], Faculty of Computers, Informatics and Microelectronics, Technical University of Moldova, Chisinau, Republic of Moldova}
+\csmdcorresponding{*Corresponding author: Vasile Ceban, [EMAIL]}
+\csmdtutor{Tutor/coordinator: [Given name FAMILY NAME], [scientific title], [affiliation]}
+
+\input{sections/00_abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_background_related_work}
+\input{sections/03_problem_formulation}
+\input{sections/04_architecture}
+\input{sections/05_cluster_selection_methodology}
+\input{sections/06_algorithm_integration}
+\input{sections/07_design_analysis}
+\input{sections/08_future_validation}
+\input{sections/09_limitations}
+\input{sections/10_conclusions}
+
+\printbibliography[heading=csmd]
+
+\end{document}

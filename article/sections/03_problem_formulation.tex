@@ -1,0 +1,72 @@
+\section{Problem Formulation and Research Objectives}\label{sec:problem}
+
+\subsection{Scheduling semantics of Karmada relevant to cluster selection}\label{sec:karmada-analysis}
+
+The design is based on an analysis of the Karmada source code at release v1.19.1 (commit c64ba38) \cite{karmada_repo}. \Cref{tab:karmada} lists the properties that determine how a custom selection objective can be integrated. Each property is given with the source file in which it can be verified, so that the analysis can be repeated for later releases.
+
+\begin{table}[t]
+\caption{Properties of the Karmada v1.19.1 scheduler that constrain a custom cluster selection objective}\label{tab:karmada}
+\centering\small\setstretch{1.0}
+\begin{tabularx}{\textwidth}{@{}p{0.6cm}Lp{5.0cm}@{}}
+\toprule
+\textbf{ID} & \textbf{Property} & \textbf{Source file (under pkg/)} \\
+\midrule
+P1 & Extension points are Filter, Score and an optional NormalizeScore; no per-cycle state, reservation or extender interface exists. & \code{scheduler/framework/interface.go} \\
+P2 & Plugins are compiled into the scheduler binary; the plugin factory receives no arguments. & \code{scheduler/framework/runtime/registry.go} \\
+P3 & Scores of different plugins are summed without weights; a weight map exists but is never filled. & \code{scheduler/framework/runtime/framework.go} \\
+P4 & An error returned by any plugin aborts the scheduling attempt. & \code{scheduler/framework/runtime/framework.go} \\
+P5 & At initial placement both in-tree score plugins return 0. & \code{scheduler/framework/plugins/clusteraffinity/}, \code{.../clusterlocality/} \\
+P6 & Without a spread constraint every feasible cluster is selected, independent of scores. & \code{scheduler/core/spreadconstraint/select_clusters.go} \\
+P7 & Candidates are ordered by score, then by available replicas, then by name. & \code{scheduler/core/spreadconstraint/util.go}, \code{group_clusters.go} \\
+P8 & If the top clusters lack capacity, the lowest-scored one is replaced by the remaining cluster with most available replicas, not by the next-best score. & \code{scheduler/core/spreadconstraint/select_clusters_by_cluster.go} \\
+P9 & Available replicas are the minimum over the registered replica estimators; the estimator registry is exported. & \code{scheduler/core/util.go}, \code{estimator/client/interface.go} \\
+P10 & Cluster resources are reported as Allocatable, Allocated and Allocating, all based on resource requests. & \code{controllers/status/cluster_status_controller.go} \\
+P11 & Placement is not revisited when cluster status changes; only policy, replica or explicit triggers cause rescheduling. & \code{scheduler/scheduler.go}, \code{scheduler/event_handler.go} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Three consequences follow. Because of P3, weighting between resource and network criteria cannot be configured across separate plugins and has to be computed inside one plugin. Because of P6, scores only influence the outcome when the policy limits the number of selected clusters, for example to one. Because of P5 and P7, the default scheduler, for a new workload restricted to one cluster, selects the cluster with the largest estimated number of available replicas. The default behaviour is therefore already capacity-oriented, and it favours large clusters, since the criterion is an absolute replica count.
+
+\subsection{Problem statement}\label{sec:problem-statement}
+
+The paper considers the initial placement of a workload $w$ with $n_w$ replicas on exactly one member cluster. Single-cluster placement keeps all replicas, and therefore all communicating components of a single-tier service, in one cluster. Splitting a workload across clusters by score would require changes to Karmada's replica assignment rather than a plugin, and it is not considered here. The notation is summarised in \cref{tab:notation}.
+
+\begin{table}[t]
+\caption{Notation}\label{tab:notation}
+\centering\small\setstretch{1.0}
+\begin{tabularx}{\textwidth}{@{}p{3.1cm}Lp{3.2cm}@{}}
+\toprule
+\textbf{Symbol} & \textbf{Meaning} & \textbf{Unit / domain} \\
+\midrule
+$\Cset$, $\Feas$ & Member clusters; clusters eligible for $w$ & sets \\
+$n_w$ & Number of replicas of $w$ & integer $\geq 1$ \\
+$d_w^{k}$ & Request of one replica for resource $k \in \Kr = \{\mathrm{cpu}, \mathrm{mem}\}$ & millicores; bytes \\
+$A_c^{k}$, $U_c^{k}$, $P_c^{k}$ & Allocatable, Allocated and Allocating amount of $k$ in cluster $c$ & as $d_w^{k}$ \\
+$F_c^{k} = A_c^{k} - U_c^{k} - P_c^{k}$ & Free requestable amount of $k$ & as $d_w^{k}$ \\
+$m_c(w)$ & Available replicas of $w$ in $c$ (minimum over estimators) & integer $\geq 0$ \\
+$\ell_c$, $t_c$, $q_c$ & Client-to-cluster RTT (median), time of newest sample, number of samples & ms; s; integer \\
+$\ell_{\mathrm{ref}}$ & RTT at which network suitability becomes zero & ms \\
+$\tau$, $q_{\min}$ & Freshness horizon; minimum number of samples & s; integer \\
+$\alpha$ & Weight of resource suitability ($1-\alpha$ for network suitability) & $[0,1]$ \\
+$R_c(w)$, $N_c$, $S_c(w)$ & Resource suitability, network suitability, final score & $[0,1]$, $[0,1]$, $\{0,\dots,100\}$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The selection problem is to choose
+\begin{equation}\label{eq:selection}
+c^{*}(w) = \arg\max_{c \in \Feas} S_c(w),
+\end{equation}
+where $\Feas$ contains only clusters that satisfy all mandatory conditions, and $S_c(w)$ expresses preferences among them. \Cref{eq:selection} thus separates the two kinds of criteria by construction: a cluster outside $\Feas$ cannot be selected whatever its score. Ties are resolved by the order of property P7.
+
+\subsection{Research objectives and design requirements}\label{sec:requirements}
+
+The research questions of \cref{sec:introduction} translate into the following design requirements.
+\begin{itemize}
+  \item D-R1 (integration): use only the documented extension mechanism (P1, P2) and keep the default Karmada stages unchanged, so that the extension can be disabled by selecting the default scheduler.
+  \item D-R2 (separation): mandatory conditions are evaluated as filters and never traded against preferences; preferences are evaluated as scores.
+  \item D-R3 (consistency): the capacity condition must agree with the capacity view used by Karmada's own selection stage, so that the replacement rule P8 does not override the ranking.
+  \item D-R4 (safe telemetry): missing, malformed or stale network measurements must neither cause a scheduling error (P4) nor improve the score of a cluster.
+  \item D-R5 (analysability): the score must be a closed-form function of observable inputs, so that decisions can be predicted and later tested.
+\end{itemize}

@@ -1,0 +1,31 @@
+% Fig. 1 -- Karmada scheduling pipeline with the proposed plugins (shaded).
+\begin{tikzpicture}[
+  font=\footnotesize, >={Stealth[length=2mm]},
+  stage/.style={draw, rounded corners=2pt, align=center, minimum width=2.2cm, minimum height=0.9cm, fill=white},
+  prop/.style={draw, rounded corners=2pt, align=center, minimum width=2.2cm, minimum height=0.7cm, fill=gray!25, thick},
+  exist/.style={draw, rounded corners=2pt, align=center, minimum width=2.2cm, minimum height=0.7cm, fill=white},
+  lbl/.style={font=\scriptsize\itshape, align=center}
+]
+\node[stage] (snap) at (0,0) {Cluster\\snapshot};
+\node[stage] (filt) at (3.0,0) {Filter};
+\node[stage] (score) at (6.0,0) {Score};
+\node[stage] (norm) at (9.0,0) {NormalizeScore};
+\node[stage] (sel) at (12.0,0) {Select};
+\node[stage] (asg) at (15.0,0) {Assign};
+
+\foreach \a/\b in {snap/filt, filt/score, score/norm, norm/sel, sel/asg} \draw[->] (\a) -- (\b);
+\draw[->] (asg.east) -- ++(0.7,0) node[right, lbl] {spec.\\clusters};
+
+% plugins below each stage
+\node[exist, below=0.5cm of filt] (f1) {in-tree: H1\\ \scriptsize affinity, taints, API};
+\node[prop, below=0.25cm of f1] (f2) {CapacityFit\\ \scriptsize H2, H3};
+\node[prop, dashed, below=0.25cm of f2] (f3) {NetLatency\\ \scriptsize H4 (optional)};
+\node[exist, below=0.5cm of score] (s1) {in-tree scores\\ \scriptsize 0 at initial placement};
+\node[prop, below=0.25cm of s1] (s2) {NetResourceScore\\ \scriptsize $R_c$, $N_c$};
+\node[prop, below=0.5cm of norm] (n1) {NetResourceScore\\ \scriptsize validity rules, $S_c$};
+\node[exist, below=0.5cm of sel] (sl1) {\code{maxGroups}=1\\ \scriptsize order P7,\\ \scriptsize replacement P8};
+\node[exist, below=0.5cm of asg] (a1) {Aggregated\\ \scriptsize all $n_w$ replicas};
+\node[exist, below=0.5cm of snap] (sn1) {resourceSummary,\\ \scriptsize annotations};
+
+\foreach \s/\p in {snap/sn1, filt/f1, score/s1, norm/n1, sel/sl1, asg/a1} \draw[densely dotted] (\s.south) -- (\p.north);
+\end{tikzpicture}

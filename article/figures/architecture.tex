@@ -1,0 +1,48 @@
+% Fig. 2 -- Proposed architecture. Shaded boxes = proposed components; white boxes = existing Karmada components.
+\begin{tikzpicture}[
+  font=\footnotesize, >={Stealth[length=2mm]},
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=0.8cm, inner sep=3pt},
+  prop/.style={box, fill=gray!25, thick},
+  exist/.style={box, fill=white},
+  grp/.style={draw, rounded corners=4pt, dashed, inner sep=6pt},
+  lbl/.style={font=\scriptsize\itshape, align=center}
+]
+% ---------------- control plane ----------------
+\node[exist, minimum width=4.6cm] (api) at (0,0) {karmada-apiserver\\ \scriptsize Cluster (status.resourceSummary, annotations),\\ \scriptsize ResourceBinding};
+\node[exist, minimum width=3.4cm] (ctrl) at (-5.6,0) {Cluster status controller\\ \scriptsize (every 10 s)};
+\node[exist, minimum width=3.0cm] (est) at (5.4,-2.3) {Replica estimators\\ \scriptsize general / resource model /\\ \scriptsize accurate (optional)};
+
+% extended scheduler
+\node[exist, minimum width=2.6cm] (intree) at (-2.2,-2.3) {In-tree plugins\\ \scriptsize Filter, Score};
+\node[prop, minimum width=2.2cm] (cap) at (0.55,-2.3) {CapacityFit\\ \scriptsize Filter};
+\node[prop, minimum width=2.4cm] (nrs) at (2.95,-2.3) {NetResourceScore\\ \scriptsize Score, NormalizeScore};
+\node[prop, dashed, minimum width=2.2cm] (lat) at (0.55,-3.45) {NetLatency\\ \scriptsize Filter (optional)};
+\begin{scope}[on background layer]
+  \node[grp, fit=(intree)(cap)(nrs)(lat), label={[lbl, anchor=south west]north west:extended karmada-scheduler (custom binary, WithPlugin)}] (sched) {};
+\end{scope}
+\begin{scope}[on background layer]
+  \node[grp, densely dotted, inner sep=9pt, fit=(api)(ctrl)(sched)(est), label={[lbl, anchor=south east]north east:Karmada control plane}] (cp) {};
+\end{scope}
+
+% ---------------- probe and clients ----------------
+\node[prop, minimum width=2.6cm] (probe) at (-5.6,2.3) {Latency probe\\ \scriptsize RTT to cluster ingress};
+\node[exist, minimum width=2.0cm] (clients) at (-8.0,2.3) {Clients};
+
+% ---------------- member clusters ----------------
+\node[exist, minimum width=2.4cm] (m1) at (-4.0,-5.6) {Member cluster 1\\ \scriptsize kube-scheduler};
+\node[exist, minimum width=2.4cm] (m2) at (0.0,-5.6) {Member cluster 2\\ \scriptsize kube-scheduler};
+\node[exist, minimum width=2.4cm] (m3) at (4.0,-5.6) {Member cluster 3\\ \scriptsize kube-scheduler};
+
+% ---------------- data flows ----------------
+\draw[->] (m1.north) to[out=110,in=-90] node[lbl, pos=0.55, left] {nodes, pods} (ctrl.south);
+\draw[->] (ctrl.east) -- node[lbl, above] {resourceSummary} (api.west);
+\draw[->, thick] (probe.east) to[out=0,in=150] node[lbl, above, pos=0.45] {patch annotations\\ rtt-ms, measured-at, samples} (api.north west);
+\draw[->, densely dashed] (probe.south) to[out=-100,in=180] node[lbl, pos=0.7, left] {RTT probes} (m1.west);
+\draw[-, densely dotted] (clients.east) -- (probe.west);
+\draw[->] ([xshift=-6mm]api.south) -- node[lbl, left] {snapshot} ([xshift=-6mm]api.south |- sched.north);
+\draw[<-] ([xshift=6mm]api.south) -- node[lbl, right] {spec.clusters} ([xshift=6mm]api.south |- sched.north);
+\draw[->] (cap.north) to[out=40,in=135] node[lbl, above, pos=0.6] {$m_c(w)$} (est.north west);
+\draw[->] (cp.south -| m2.north) -- node[lbl, right] {Work objects (binding and execution controllers)} (m2.north);
+\draw[->] (cp.south -| m3.north) -- (m3.north);
+\draw[->] ([xshift=4mm]cp.south -| m1.north) -- ([xshift=4mm]m1.north);
+\end{tikzpicture}
