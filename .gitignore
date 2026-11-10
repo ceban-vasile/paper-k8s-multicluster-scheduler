@@ -1,0 +1,45 @@
+# ---- LaTeX build artifacts (article/) ----
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.run.xml
+*.synctex.gz
+*.synctex(busy)
+*.xdv
+*.fdb_latexmk
+*.fls
+*-blx.bib
+*.nav
+*.snm
+*.vrb
+article/build.log
+# The compiled article is tracked on purpose; uncomment to ignore it:
+# article/main.pdf
+
+# ---- Go (future thesis implementation) ----
+bin/
+*.exe
+*.test
+*.out
+coverage.*
+vendor/
+
+# ---- Editors and OS ----
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Local environment and secrets ----
+.env
+*.kubeconfig
+kubeconfig*
