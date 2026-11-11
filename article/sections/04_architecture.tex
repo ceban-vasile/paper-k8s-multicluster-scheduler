@@ -4,7 +4,9 @@
 
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{\input{figures/architecture}}
+\IfFileExists{figures/architecture.png}%
+  {\includegraphics[width=\textwidth,height=0.7\textheight,keepaspectratio]{figures/architecture.png}}% exported from figures/mermaid/architecture.mmd
+  {\resizebox{\textwidth}{!}{\input{figures/architecture}}}% TikZ fallback
 \caption{Proposed architecture; shaded boxes are proposed components, white boxes are existing Karmada components}\label{fig:architecture}
 \end{figure}
 

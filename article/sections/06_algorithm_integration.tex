@@ -6,7 +6,9 @@ Karmada processes a binding in the stages shown in \cref{fig:pipeline}: the sche
 
 \begin{figure}[t]
 \centering
-\resizebox{\textwidth}{!}{\input{figures/pipeline}}
+\IfFileExists{figures/pipeline.png}%
+  {\includegraphics[width=\textwidth]{figures/pipeline.png}}% exported from figures/mermaid/pipeline.mmd
+  {\resizebox{\textwidth}{!}{\input{figures/pipeline}}}% TikZ fallback
 \caption{Karmada scheduling stages and the position of the proposed plugins (shaded)}\label{fig:pipeline}
 \end{figure}
 

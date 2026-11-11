@@ -1,0 +1,37 @@
+%%{init: {"theme": "base", "themeVariables": {"fontFamily": "Times New Roman", "fontSize": "16px", "primaryColor": "#ffffff", "primaryBorderColor": "#000000", "lineColor": "#000000", "clusterBkg": "#ffffff", "clusterBorder": "#555555"}}}%%
+%% Fig. 1 - Karmada scheduling stages and the position of the proposed plugins (grey).
+%% Export: mermaid.live -> Actions -> PNG (or SVG) -> save as article/figures/pipeline.png
+flowchart LR
+  snap["<b>Cluster snapshot</b><br/>resourceSummary,<br/>annotations"]
+
+  subgraph F["Filter"]
+    direction TB
+    f1["In-tree: H1<br/>API, affinity, taints"]
+    f2["<b>CapacityFit</b><br/>H2, H3"]:::proposed
+    f3["<b>NetLatency</b><br/>H4, optional"]:::optional
+  end
+
+  subgraph S["Score"]
+    direction TB
+    s1["In-tree scores<br/>0 at initial placement"]
+    s2["<b>NetResourceScore</b><br/>R<sub>c</sub>, N<sub>c</sub>"]:::proposed
+  end
+
+  subgraph N["NormalizeScore"]
+    n1["<b>NetResourceScore</b><br/>validity rules, S<sub>c</sub>"]:::proposed
+  end
+
+  subgraph SEL["Select"]
+    sl["maxGroups = 1<br/>order P7,<br/>replacement P8"]
+  end
+
+  subgraph A["Assign"]
+    a1["Aggregated<br/>all n<sub>w</sub> replicas"]
+  end
+
+  out(["ResourceBinding<br/>spec.clusters"])
+
+  snap --> F --> S --> N --> SEL --> A --> out
+
+  classDef proposed fill:#d9d9d9,stroke:#000000,stroke-width:2px;
+  classDef optional fill:#d9d9d9,stroke:#000000,stroke-width:2px,stroke-dasharray:6 4;

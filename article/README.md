@@ -24,7 +24,16 @@ Output: `main.pdf`.
 | `main.tex` | Preamble, title block, section includes |
 | `csmd.sty` | **Unofficial** LaTeX reproduction of the CSMD-UTM 2026 Word template, including the biblatex reference style |
 | `sections/00_abstract.tex` … `10_conclusions.tex` | One file per section, in the structure required for this article |
-| `figures/architecture.tex`, `pipeline.tex`, `regions.tex` | TikZ/pgfplots figures (vector). `regions` plots analytic functions, not data. |
+| `figures/mermaid/architecture.mmd`, `pipeline.mmd` | Mermaid sources of Fig. 2 and Fig. 1 |
+| `figures/architecture.png`, `pipeline.png` | Images exported from the Mermaid sources (added by the author). If a PNG is missing, the TikZ fallback (`figures/*.tex`) is used. |
+| `figures/regions.tex` | pgfplots chart of Fig. 3 (analytic functions, not data) |
+
+### Updating Fig. 1 and Fig. 2
+
+1. Open a `.mmd` file in <https://mermaid.live> and paste its content.
+2. Switch mermaid.live to **light mode** (sun/moon toggle, top right), because a dark-mode export bakes a dark background into the PNG. Then export with *Actions → PNG* (prefer a large size); do not take a screenshot.
+3. Save the image as `figures/architecture.png` or `figures/pipeline.png` (exact names).
+4. Recompile. The figure picks up the new image automatically, at full text width.
 | `references.bib` | 35 entries, all cited; metadata verified, see `../literature_matrix.csv` |
 
 ## Formatting assumptions (no official LaTeX template exists)
